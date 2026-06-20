@@ -3,148 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>المخازن</title>
+    <title>نظام مخازن زقزوق</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <style>
-        body { direction: rtl; text-align: right; background-color: #ffffff; color: #000000; font-family: 'Segoe UI', sans-serif; }
-        .header-box { text-align: center; margin-top: 25px; margin-bottom: 25px; position: relative; }
-        .main-title { font-size: 38px; font-weight: bold; }
-        .shop-title { font-size: 16px; color: #555555; }
-        input, button, .card { border-radius: 15px !important; text-align: center !important; }
-        .unified-card { border: 2px solid #000000; border-radius: 20px; padding: 20px; background-color: #ffffff; margin-top: 15px; }
-        .center-datetime { font-size: 14px; color: #666666; text-align: center; margin-bottom: 12px; font-weight: bold; }
-        .center-prod-title { font-size: 28px; font-weight: bold; color: #ff0000; text-align: center; margin-bottom: 15px; }
-        .data-row { display: flex; justify-content: space-around; margin-bottom: 15px; background: #f9f9f9; padding: 10px; border-radius: 12px; }
-        .data-cell { text-align: center; flex: 1; }
-        .cell-label { font-size: 13px; color: #777777; }
-        .cell-value { font-size: 16px; font-weight: bold; }
-        .meters-box { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 10px; }
-        .meter-btn { border: 2px solid #000000; background: #ffffff; padding: 8px 15px; border-radius: 12px; font-weight: bold; cursor: pointer; }
-        .meter-btn.disabled { border-color: #ff0000; color: #ff0000; background: #fff5f5; cursor: not-allowed; }
-        .divider { border-top: 3px dashed #000000; margin: 20px 0; }
-        .section-title { font-size: 18px; font-weight: bold; text-align: center; margin-top: 15px; }
-        .admin-badge { position: absolute; top: 0; left: 10px; background: #000; color: #fff; padding: 5px 10px; border-radius: 10px; font-size: 12px; cursor: pointer; text-decoration: none; }
+        body { direction: rtl; text-align: right; background-color: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+        .file-banner { background-color: #002244; color: #fff; text-align: center; padding: 8px; font-weight: bold; font-size: 14px; }
+        .unified-card { border: 2px solid #000; border-radius: 20px; padding: 20px; background: #fff; margin-top: 20px; }
+        .prod-title { font-size: 26px; font-weight: bold; text-align: center; color: #000; margin-bottom: 15px; }
+        .info-row { display: flex; justify-content: space-between; background: #f1f1f1; padding: 10px; border-radius: 12px; margin-bottom: 10px; }
+        .meters-row { background: #fff3cd; padding: 15px; border-radius: 12px; margin-top: 10px; }
+        .meter-btn { border: 2px solid #000; background: #fff; padding: 5px 12px; margin: 5px; border-radius: 8px; font-weight: bold; }
+        .divider { border-top: 3px dashed #000; margin: 20px 0; }
     </style>
 </head>
 <body>
-<div class="container" style="max-width: 600px;">
-    <div class="header-box">
-        <a href="#" onclick="toggleAdminView()" class="admin-badge">لوحة التحكم</a>
-        <div class="main-title">المخازن</div>
-        <div class="shop-title">محلات زقزوق للأقمشة</div>
-    </div>
 
-    <div id="searchSection">
-        <div class="mb-4">
-            <input type="text" id="searchQuery" class="form-control form-control-lg" placeholder="ابحث باسم الخامة بشكل أساسي...">
-            <button onclick="runSearch()" class="btn btn-dark w-100 mt-2 btn-lg">بحث</button>
-        </div>
-        <div id="alertBox" class="alert d-none text-center"></div>
-        <div id="resultsArea"></div>
-    </div>
-
-    <div id="adminSection" class="d-none">
-        <div class="unified-card">
-            <h4 class="fw-bold mb-3 text-center">تحديث وتطهير بيانات المخزن</h4>
-            <form id="adminUploadForm" enctype="multipart/form-data">
-                <div class="mb-3">
-                    <label class="form-label fw-bold">كود دخول المسؤول</label>
-                    <input type="password" id="passCode" name="pass_code" class="form-control" placeholder="اكتب كود الدخول السري" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">اختر ملف الإكسيل الجديد (.xlsx)</label>
-                    <input type="file" name="excel_file" class="form-control" accept=".xlsx, .xls" required>
-                </div>
-                <button type="submit" class="btn btn-primary w-100 btn-lg">رفع وتحديث المخزن فوراً</button>
-            </form>
-            <button onclick="toggleAdminView()" class="btn btn-light w-100 mt-3">العودة لصفحة البحث</button>
-        </div>
-    </div>
+<!-- عرض اسم ملف الإكسيل بصورة دائمة ودورية في أعلى الموقع -->
+<div class="file-banner">
+    الملف النشط حالياً في درايف: <span id="fileNameDisplay">{{ file_name }}</span>
 </div>
 
-<div class="modal fade" id="withdrawModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content" style="border-radius: 20px;">
-            <div class="modal-body text-center p-4">
-                <h5 class="fw-bold mb-3">تسجيل سحب ثوب وتصويره</h5>
-                <form id="withdrawForm" enctype="multipart/form-data">
-                    <input type="hidden" id="modalIdx" name="idx">
-                    <input type="hidden" id="modalMeter" name="meter">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold">التقط صورة الثوب الخارج</label>
-                        <input type="file" name="photo" class="form-control" accept="image/*" capture="environment" required>
-                    </div>
-                    <button type="submit" class="btn btn-danger w-100 btn-lg">تأكيد تسجيل الخروج والرفع فوراً</button>
-                </form>
-            </div>
+<div class="container" style="max-width: 600px; margin-top: 20px;">
+    <h2 class="text-center fw-bold">محلات زقزوق - المخازن</h2>
+    
+    <!-- خانات البحث السريع -->
+    <div class="bg-white p-3 rounded shadow-sm mt-3">
+        <input type="text" id="searchName" class="form-control mb-2" placeholder="البحث باسم المنتج...">
+        <div class="input-group mb-2">
+            <input type="text" id="searchCode" class="form-control" placeholder="أو ادخل الكود للوصول السريع...">
+            <button onclick="doSearch()" class="btn btn-dark">بحث سريع</button>
         </div>
     </div>
+
+    <div id="results"></div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    let withdrawModalObj = new bootstrap.Modal(document.getElementById('withdrawModal'));
+function doSearch() {
+    let name = document.getElementById('searchName').value;
+    let code = document.getElementById('searchCode').value;
     
-    function toggleAdminView() {
-        document.getElementById('searchSection').classList.toggle('d-none');
-        document.getElementById('adminSection').classList.toggle('d-none');
-    }
-
-    function runSearch() {
-        let q = document.getElementById('searchQuery').value;
-        fetch('/search', { method: 'POST', headers: {'Content-Type': 'application/x-www-form-urlencoded'}, body: 'query=' + encodeURIComponent(q) })
-        .then(res => res.json())
-        .then(data => {
-            let area = document.getElementById('resultsArea');
-            let alertBox = document.getElementById('alertBox');
-            area.innerHTML = ''; alertBox.classList.add('d-none');
-            if (data.status !== 'success') {
-                alertBox.className = 'alert alert-danger text-center'; alertBox.innerText = data.msg; alertBox.classList.remove('d-none'); return;
-            }
-            let cardHtml = `<div class="unified-card"><div class="center-prod-title">${data.data[0].name}</div>`;
-            data.data.forEach((item, index) => {
-                if (index > 0) cardHtml += `<div class="divider"></div>`;
-                cardHtml += `
-                    <div class="center-datetime">المسجل في: ${item.date} | ${item.time}</div>
-                    <div class="data-row">
-                        <div class="data-cell"><div class="cell-label">الكود</div><div class="cell-value">${item.code}</div></div>
-                        <div class="data-cell"><div class="cell-label">العدد المتوفر</div><div class="cell-value">${item.qty}</div></div>
-                        <div class="data-cell"><div class="cell-label">المكان</div><div class="cell-value">${item.location}</div></div>
-                    </div>
-                    <div class="section-title">الأمتار المتوفرة للأثواب</div>
-                    <div class="meters-box">`;
+    fetch('/search', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: `query=${encodeURIComponent(name)}&search_code=${encodeURIComponent(code)}`
+    })
+    .then(res => res.json())
+    .then(data => {
+        let container = document.getElementById('results');
+        container.innerHTML = '';
+        if(data.status === 'success') {
+            data.data.forEach((item, idx) => {
+                let html = `
+                    <div class="unified-card">
+                        <!-- الاسم في المنتصف -->
+                        <div class="prod-title">${item.name}</div>
+                        
+                        <!-- الصف الخاص بالكود والمكان والملاحظات -->
+                        <div class="info-row">
+                            <div><strong>الكود:</strong> ${item.code}</div>
+                            <div><strong>المكان:</strong> ${item.location}</div>
+                            <div><strong>ملاحظات:</strong> ${item.notes || '-'}</div>
+                        </div>
+                        
+                        <!-- صف أسفل منه يعرض جميع أمتار الأثواب -->
+                        <div class="meters-row">
+                            <div class="fw-bold mb-2">أمتار الأثواب المتوفرة (اضغط للسحب):</div>
+                            <div class="d-flex flex-wrap">`;
+                            
                 item.meters.forEach(m => {
-                    if (m.includes('❌')) { cardHtml += `<button class="meter-btn disabled" disabled>${m}</button>`; }
-                    else { cardHtml += `<button class="meter-btn" onclick="openWithdraw(${item.index}, '${m}')">${m}</button>`; }
+                    html += `<button class="meter-btn" onclick="withdrawMeter('${item.code}', '${m}')">${m}</button>`;
                 });
-                cardHtml += `</div>`;
+                
+                html += `   </div>
+                        </div>
+                    </div>
+                    <div class="divider"></div>`;
+                container.innerHTML += html;
             });
-            cardHtml += `</div>`; area.innerHTML = cardHtml;
-        });
+        } else {
+            container.innerHTML = `<div class="alert alert-danger text-center mt-3">${data.msg}</div>`;
+        }
+    });
+}
+
+function withdrawMeter(code, meter) {
+    if(confirm(`هل تريد تأكيد سحب الثوب مقاس ${meter}؟`)) {
+        fetch('/withdraw', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `code=${code}&meter=${encodeURIComponent(meter)}`
+        })
+        .then(res => res.json())
+        .then(data => { alert(data.msg); doSearch(); });
     }
-
-    function openWithdraw(idx, meter) { document.getElementById('modalIdx').value = idx; document.getElementById('modalMeter').value = meter; withdrawModalObj.show(); }
-    
-    document.getElementById('withdrawForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        fetch('/withdraw', { method: 'POST', body: new FormData(this) }).then(res => res.json()).then(data => { withdrawModalObj.hide(); runSearch(); alert(data.msg); });
-    });
-
-    // كود رفع ملف الإكسيل للمسؤول
-    document.getElementById('adminUploadForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        let formData = new FormData(this);
-        fetch('/admin/upload', { method: 'POST', body: formData })
-        .then(res => {
-            if(res.ok) return res.text();
-            throw new Error('الكود غير صحيح أو حدث خطأ أثناء الرفع');
-        })
-        .then(msg => {
-            alert(msg);
-            toggleAdminView();
-        })
-        .catch(err => alert(err.message));
-    });
+}
 </script>
 </body>
 </html>
