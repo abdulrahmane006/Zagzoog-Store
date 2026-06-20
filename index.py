@@ -1,51 +1,31 @@
 from flask import Flask, render_template, request, jsonify
 from datetime import datetime
+import os
+import json
+import gspread
+from google.oauth2.service_account import Credentials
 
 app = Flask(__name__)
 
-# اسم ملف الإكسيل النشط حالياً في درايف
+# جلب مفتاح الأمان السري من إعدادات Vercel بأمان
+creds_json = os.environ.get('GOOGLE_CREDENTIALS')
+
+def get_gdrive_client():
+    if not creds_json:
+        return None
+    scopes = [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive'
+    ]
+    creds = Credentials.from_service_account_info(json.loads(creds_json), scopes=scopes)
+    return gspread.authorize(creds)
+
+# اسم ملف الإكسيل/الشيت النشط حالياً في درايف
 current_excel_file_name = "مخزن_الأقمشة_الرئيسي.xlsx"
-
-# بيانات تجريبية ثابتة ومحاكاة لما يتم قراءته من فولدر "المخازن"
-DATA_STORE = [
-    {
-        "code": "101",
-        "name": "كريب تركي فرز أول",
-        "qty": 3,
-        "location": "الرف أ",
-        "meters": ["22.5", "25", "21"],
-        "notes": "خامة ممتازة وارد دبي"
-    },
-    {
-        "code": "101",
-        "name": "كريب تركي فرز ثاني",
-        "qty": 5,
-        "location": "الرف ب",
-        "meters": ["18", "19.5"],
-        "notes": "كود مكرر للتجربة"
-    }
-]
-
-# السجل المخصص لملف إكسيل "الخارج من المخزن" (يملأ تلقائياً)
-DATA_OUT_LOG = [
-    {
-        "name": "حرير إيطالي سوبر",
-        "code": "105",
-        "meter": "24.5",
-        "location": "الرف ج",
-        "notes": "خروج كعينة للعميل",
-        "date": "2026-06-20 15:30"
-    }
-]
 
 @app.route('/')
 def home():
     return render_template('index.html', file_name=current_excel_file_name)
-
-# صفحة المسؤول المنفصلة
-@app.route('/admin')
-def admin_page():
-    return render_template('admin.html', out_products=DATA_OUT_LOG)
 
 @app.route('/search', methods=['POST'])
 def search():
@@ -55,20 +35,45 @@ def search():
     if not query_name:
         return jsonify({"status": "error", "msg": "برجاء إدخال اسم النوع بشكل أساسي للبحث"})
     
-    results = []
-    for item in DATA_STORE:
-        # البحث بالنوع (أو النوع والكود معاً إذا تم إدخال الكود)
-        if query_name in item['name']:
-            if query_code:
-                if item['code'] == query_code:
-                    results.append(item)
-            else:
-                results.append(item)
-                
-    if not results:
-        return jsonify({"status": "error", "msg": "لم يتم العثور على نتائج تطابق هذا البحث"})
+    try:
+        gc = get_gdrive_client()
+        if not gc:
+            return jsonify({"status": "error", "msg": "لم يتم إعداد مفتاح الأمان في السيرفر بعد"})
+            
+        # فتح الفولدر والملف من درايف تلقائياً
+        sh = gc.open(current_excel_file_name.split('.')[0])
+        worksheet = sh.get_worksheet(0)
+        all_records = worksheet.get_all_records()
         
-    return jsonify({"status": "success", "data": results})
+        results = []
+        for item in all_records:
+            name_val = str(item.get('اسم النوع', ''))
+            code_val = str(item.get('الكود', ''))
+            
+            if query_name in name_val:
+                if query_code:
+                    if code_val == query_code:
+                        results.append(parse_item(item))
+                else:
+                    results.append(parse_item(item))
+                    
+        if not results:
+            return jsonify({"status": "error", "msg": "لم يتم العثور على نتائج تطابق هذا البحث"})
+            
+        return jsonify({"status": "success", "data": results})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": f"خطأ في الاتصال بالدرايف: {str(e)}"})
+
+def parse_item(item):
+    meters_raw = str(item.get('الأمتار بالتفصيل', ''))
+    return {
+        "code": str(item.get('الكود', '')),
+        "name": str(item.get('اسم النوع', '')),
+        "qty": item.get('الأثواب المتاحة', 0),
+        "location": str(item.get('المكان', '')),
+        "meters": meters_raw.split() if meters_raw else [],
+        "notes": str(item.get('ملاحظات', '-'))
+    }
 
 @app.route('/withdraw', methods=['POST'])
 def withdraw():
@@ -77,29 +82,57 @@ def withdraw():
     meter_to_remove = request.form.get('meter', '')
     notes = request.form.get('notes', '')
     
-    # هنا الكود يستقبل الصورة لرفعها في فولدر "الصور" داخل "الخارج من المخزن"
+    # هنا يتم استقبال الصورة الملقوطة من الكاميرا لرفعها تلقائياً لفولدر "الصور"
     photo = request.files.get('photo')
     
-    for item in DATA_STORE:
-        if item['code'] == code and item['name'] == name:
-            for i, m in enumerate(item['meters']):
-                if m == meter_to_remove and "❌" not in m:
-                    # 1. وضع علامة ❌ بجانب الثوب المنتقص
-                    item['meters'][i] = f"{meter_to_remove} ❌"
-                    if item['qty'] > 0: 
-                        item['qty'] -= 1
-                    
-                    # 2. حفظ البيانات تلقائياً في سجل "الخارج من المخزن"
-                    log_entry = {
-                        "name": item['name'],
-                        "code": item['code'],
-                        "meter": meter_to_remove,
-                        "location": item['location'],
-                        "notes": notes if notes else "تم السحب والتصوير تلقائياً",
-                        "date": datetime.now().strftime('%Y-%m-%d %H:%M')
-                    }
-                    DATA_OUT_LOG.append(log_entry)
-                    return jsonify({"status": "success", "msg": "تم تسجيل السحب بنجاح، وجاري حفظ الصورة في فولدر (الصور)!"})
-                    
-    return jsonify({"status": "error", "msg": "حدث خطأ أثناء تسجيل السحب"})
-    
+    try:
+        gc = get_gdrive_client()
+        # 1. تحديث ملف المخزن الرئيسي بوضع ❌
+        sh = gc.open(current_excel_file_name.split('.')[0])
+        ws = sh.get_worksheet(0)
+        cells = ws.findall(name)
+        
+        for cell in cells:
+            row = cell.row
+            row_data = ws.row_values(row)
+            if row_data[0] == code: # التأكد من الكود والاسم معاً
+                meters = row_data[4].split()
+                for i, m in enumerate(meters):
+                    if m == meter_to_remove:
+                        meters[i] = f"{meter_to_remove}❌"
+                        ws.update_cell(row, 5, " ".join(meters)) # تحديث الأمتار
+                        qty = int(row_data[2])
+                        if qty > 0:
+                            ws.update_cell(row, 3, qty - 1) # نقص ثوب
+                        break
+        
+        # 2. تسجيل البيانات في ملف منفصل داخل فولدر "الخارج من المخزن"
+        try:
+            sh_out = gc.open("الخارج من المخزن")
+        except:
+            sh_out = gc.create("الخارج من المخزن")
+            
+        ws_out = sh_out.get_worksheet(0)
+        if not ws_out.get_all_values():
+            ws_out.append_row(["التاريخ والوقت", "اسم النوع", "الكود", "المتر المسحوب", "المكان", "ملاحظات"])
+            
+        ws_out.append_row([
+            datetime.now().strftime('%Y-%m-%d %H:%M'),
+            name, code, meter_to_remove, "الرف المخصص", notes if notes else "سحب وتصوير تلقائي"
+        ])
+        
+        return jsonify({"status": "success", "msg": "تم السحب بنجاح، وتحديث المخزن، وحفظ البيانات في فولدر الخارج!"})
+    except Exception as e:
+        return jsonify({"status": "error", "msg": f"حدث خطأ أثناء السحب: {str(e)}"})
+
+@app.route('/admin')
+def admin_page():
+    try:
+        gc = get_gdrive_client()
+        sh_out = gc.open("الخارج من المخزن")
+        ws_out = sh_out.get_worksheet(0)
+        records = ws_out.get_all_records()
+        return render_template('admin.html', out_products=records)
+    except:
+        return render_template('admin.html', out_products=[])
+        
